@@ -2,6 +2,7 @@ let html_to_plain_text html_string =
   let tokens =
     Markup.string html_string |> Markup.parse_html |> Markup.signals
   in
+  (* TODO: Add line breaks div, br, *)
   let rec process_tokens acc = function
     | [] -> acc
     | `Comment _ :: rest -> process_tokens acc rest
@@ -20,6 +21,7 @@ let html_to_plain_text html_string =
     (Markup.fold (fun acc signal -> signal :: acc) [] tokens |> List.rev)
 ;;
 
+(* TODO: Add tests cases *)
 let is_markup str =
   let open Str in
   let tag_pattern = regexp "<[^>]+>[^<]*</[^>]+>" in
