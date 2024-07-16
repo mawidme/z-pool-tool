@@ -76,6 +76,7 @@
   canary
   (guardian
    (= 0.3.2))
+  (markup
+   (>= 1.0.3))
   ;; Test/Dev dependencies
-  (alcotest-lwt :with-test)
-  ))
+  (alcotest-lwt :with-test)))

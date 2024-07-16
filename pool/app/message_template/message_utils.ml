@@ -93,7 +93,7 @@ let render_email_params params ({ Sihl_email.text; html; subject; _ } as email) 
   Sihl_email.
     { email with
       subject = render_params params subject
-    ; text = render_params params text
+    ; text = render_params ~to_plain:true params text
     ; html = html |> CCOption.map (render_params ~cb:line_breaks_to_html params)
     }
 ;;

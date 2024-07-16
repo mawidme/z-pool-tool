@@ -3,6 +3,7 @@
  (public_name pool.utils)
  (libraries
   containers
+  markup
   mirage-crypto-pk
   mirage-crypto-rng-lwt
   pool.canary

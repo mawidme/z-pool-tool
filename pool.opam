@@ -35,6 +35,7 @@ depends: [
   "tyxml-ppx" {>= "4.6.0"}
   "canary"
   "guardian" {= "0.3.2"}
+  "markup" {>= "1.0.3"}
   "alcotest-lwt" {with-test}
   "odoc" {with-doc}
 ]
