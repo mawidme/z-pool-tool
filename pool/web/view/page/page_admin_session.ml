@@ -1841,10 +1841,10 @@ let cancel
   =
   let open Pool_common in
   let action =
-    Format.asprintf
-      "/admin/experiments/%s/sessions/%s/cancel"
-      (Experiment.Id.value experiment.Experiment.id)
-      Session.(Id.value session.id)
+    HttpUtils.Url.Admin.session_path
+      ~suffix:"cancel"
+      ~id:session.Session.id
+      experiment.Experiment.id
   in
   let follow_ups_notification () =
     match follow_ups with

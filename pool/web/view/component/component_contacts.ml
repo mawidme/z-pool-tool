@@ -49,3 +49,17 @@ let external_data_ids language external_data_ids =
             ])
     |> Component_table.horizontal_table ~thead `Striped
 ;;
+
+let contact_lastname_firstname access_contact_profiles contact =
+  let text = contact |> Contact.lastname_firstname |> txt in
+  match access_contact_profiles with
+  | true ->
+    a
+      ~a:
+        [ a_href
+            (Http_utils.Url.Admin.contact_path ~id:(Contact.id contact) ()
+             |> Sihl.Web.externalize_path)
+        ]
+      [ text ]
+  | false -> text
+;;

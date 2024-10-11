@@ -12,13 +12,6 @@ let path =
   Contact.id %> Contact.Id.value %> Format.asprintf "/admin/contacts/%s"
 ;;
 
-let contact_lastname_firstname access_contact_profiles contact =
-  let text = contact |> Contact.lastname_firstname |> txt in
-  match access_contact_profiles with
-  | true -> a ~a:[ a_href (path contact |> Sihl.Web.externalize_path) ] [ text ]
-  | false -> text
-;;
-
 let enroll_contact_modal_id = "enroll-modal"
 
 let enroll_contact_path ?suffix contact_id =
@@ -452,7 +445,7 @@ let experiment_history Pool_context.{ language; _ } contact experiments query =
 ;;
 
 let experiment_history_modal
-  { Pool_context.language; _ }
+  ({ Pool_context.language; _ } as context)
   (experiment : Experiment.t)
   assignments
   =
@@ -460,8 +453,9 @@ let experiment_history_modal
   let title (_ : Language.t) = Experiment.(Title.value experiment.title) in
   let html =
     let thead =
-      Pool_message.Field.[ Start; NoShow; Participant ]
-      |> CCList.map CCFun.(Utils.field_to_string_capitalized language %> txt)
+      (Pool_message.Field.[ Start; NoShow; Participant ]
+       |> CCList.map CCFun.(Utils.field_to_string_capitalized language %> txt))
+      @ [ txt "" ]
     in
     let to_icon value =
       CCOption.map_or
@@ -470,8 +464,21 @@ let experiment_history_modal
     in
     let rows =
       let open Assignment in
+      let buttons (session, assignment) =
+        let open Page_admin_assignments.Partials in
+        let session = `Session session in
+        let cancel = cancel context experiment session in
+        let mark_as_deleted = mark_as_deleted context experiment session in
+        Http_utils.AssignmentUtils.
+          [ cancelable session assignment, cancel
+          ; deletable assignment, mark_as_deleted
+          ]
+        |> CCList.filter_map (fun (active, form) ->
+          if not active then None else Some (form assignment))
+        |> Component.ButtonGroup.dropdown ~orientation:`Left
+      in
       assignments
-      |> CCList.map (fun (session, { no_show; participated; _ }) ->
+      |> CCList.map (fun ((session, { no_show; participated; _ }) as m) ->
         let start = Session.start_end_with_duration_human session |> txt in
         let start =
           if CCOption.is_some session.Session.follow_up_to
@@ -481,6 +488,7 @@ let experiment_history_modal
         [ start
         ; to_icon NoShow.value no_show
         ; to_icon Participated.value participated
+        ; buttons m
         ])
     in
     Component.Table.horizontal_table ~thead `Striped rows

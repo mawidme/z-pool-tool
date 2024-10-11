@@ -1,6 +1,7 @@
 module HttpUtils = Http_utils
 module Message = HttpUtils.Message
 module Field = Pool_message.Field
+module AssignmentCommand = Cqrs_command.Assignment_command
 
 let src = Logs.Src.create "handler.admin.contacts"
 let extract_happy_path = HttpUtils.extract_happy_path ~src
@@ -50,7 +51,7 @@ let experiment_history req =
   let open Utils.Lwt_result.Infix in
   let contact_id = contact_id req in
   let experiment_id = experiment_id req in
-  let result ({ Pool_context.database_label; _ } as context) =
+  let result ({ Pool_context.database_label; guardian; _ } as context) =
     let* contact = Contact.find database_label contact_id in
     let* experiment = Experiment.find database_label experiment_id in
     let%lwt assignments =
@@ -58,6 +59,19 @@ let experiment_history req =
         database_label
         experiment_id
         contact
+      >|> Lwt_list.iter_s (fun (session, assignment) ->
+        let open AssignmentCommand in
+        let assignment_id = assignment.Assignment.id in
+        let validate = Guard.PermissionOnTarget.validate in
+        let%lwt can_cancel =
+          validate
+            (Assignment.Guard.Access.update experiment_id assignment_id)
+            guardian
+        in
+        let%lwt delete_cancel =
+          validate (MarkAsDeleted.effects experiment_id assignment_id) guardian
+        in
+        Lwt.return (session, assignment, can_cancel, delete_cancel))
     in
     Page.Admin.Contact.experiment_history_modal context experiment assignments
     |> HttpUtils.Htmx.html_to_plain_text_response

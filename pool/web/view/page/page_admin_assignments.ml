@@ -142,6 +142,90 @@ module Partials = struct
     |> span
   ;;
 
+  (* TODO: Move to components? *)
+  let button_form
+    ?(style = `Primary)
+    language
+    csrf
+    action
+    confirmable
+    control
+    icon
+    =
+    form
+      ~a:
+        [ a_action (Sihl.Web.externalize_path action)
+        ; a_method `Post
+        ; a_user_data
+            "confirmable"
+            (Pool_common.Utils.confirmable_to_string language confirmable)
+        ]
+      [ csrf_element csrf ()
+      ; submit_element
+          ~is_text:true
+          ~submit_type:style
+          ~has_icon:icon
+          language
+          control
+          ()
+      ]
+  ;;
+
+  let cancel { Pool_context.csrf; language; _ } experiment session assignment =
+    let open HttpUtils in
+    let confirmable =
+      Pool_common.I18n.(
+        if has_follow_ups session
+        then CancelAssignmentWithFollowUps
+        else CancelAssignment)
+    in
+    let action =
+      Url.Admin.assignment_path
+        ~suffix:"cancel"
+        experiment.Experiment.id
+        (Session.session_id session)
+        ~id:assignment.Assignment.id
+    in
+    button_form
+      language
+      csrf
+      ~style:`Error
+      action
+      confirmable
+      Control.(Cancel None)
+      Component.Icon.Close
+  ;;
+
+  let mark_as_deleted
+    { Pool_context.csrf; language; _ }
+    experiment
+    session
+    assignment
+    =
+    let open HttpUtils in
+    let confirmable =
+      Pool_common.I18n.(
+        if has_follow_ups session
+        then MarkAssignmentWithFollowUpsAsDeleted
+        else MarkAssignmentAsDeleted)
+    in
+    let action =
+      Url.Admin.assignment_path
+        ~suffix:"mark-as-deleted"
+        experiment.Experiment.id
+        (Session.session_id session)
+        ~id:assignment.Assignment.id
+    in
+    button_form
+      language
+      csrf
+      ~style:`Error
+      action
+      confirmable
+      Control.MarkAsDeleted
+      Component.Icon.TrashOutline
+  ;;
+
   module ReminderModal = struct
     let modal_id id = Format.asprintf "reminder-%s" (Assignment.Id.value id)
     let control = Control.Send (Some Field.Reminder)
@@ -536,7 +620,7 @@ let data_table
   ?(view_contact_name = false)
   ?(view_contact_info = false)
   ?(is_print = false)
-  (Pool_context.{ language; csrf; user; _ } as context)
+  (Pool_context.{ language; user; _ } as context)
   experiment
   (session : [ `Session of Session.t | `TimeWindow of Time_window.t ])
   text_messages_enabled
@@ -570,41 +654,16 @@ let data_table
       , status_label language )
     ]
   in
-  let deletable = CCFun.(Assignment.is_deletable %> CCResult.is_ok) in
-  let cancelable m =
-    assignments_cancelable session
-    && Assignment.is_cancellable m |> CCResult.is_ok
-  in
   let session_changeable m = HttpUtils.Session.session_changeable session m in
   let action { Assignment.id; _ } suffix =
-    assignment_specific_path
-      ~suffix
+    HttpUtils.Url.Admin.assignment_path
       experiment.Experiment.id
       (session_id session)
-      id
+      ~suffix
+      ~id
   in
   let create_reminder_modal assignment =
     HttpUtils.Session.reminder_sendable session assignment
-  in
-  let button_form ?(style = `Primary) suffix confirmable control icon assignment
-    =
-    form
-      ~a:
-        [ a_action (action assignment suffix |> Sihl.Web.externalize_path)
-        ; a_method `Post
-        ; a_user_data
-            "confirmable"
-            (Utils.confirmable_to_string language confirmable)
-        ]
-      [ csrf_element csrf ()
-      ; submit_element
-          ~is_text:true
-          ~submit_type:style
-          ~has_icon:icon
-          language
-          control
-          ()
-      ]
   in
   let edit m =
     let action = action m "edit" in
@@ -628,10 +687,10 @@ let data_table
     a
       ~a:
         [ a_href
-            (Format.asprintf
-               "%s/%s"
-               (Page_admin_contact.path contact)
-               Field.(human_url ExternalDataId)
+            (HttpUtils.Url.Admin.contact_path
+               ~suffix:Field.(human_url ExternalDataId)
+               ~id:Contact.(id contact)
+               ()
              |> Sihl.Web.externalize_path)
         ; a_class [ "has-icon"; "primary"; "btn"; "is-text" ]
         ]
@@ -685,28 +744,6 @@ let data_table
       ~control:(language, Control.(Send (Some Field.Message)))
       ~icon:Component.Icon.MailOutline
   in
-  let cancel =
-    button_form
-      ~style:`Error
-      "cancel"
-      I18n.(
-        if has_follow_ups session
-        then CancelAssignmentWithFollowUps
-        else CancelAssignment)
-      Control.(Cancel None)
-      Component.Icon.Close
-  in
-  let mark_as_deleted =
-    button_form
-      ~style:`Error
-      "mark-as-deleted"
-      I18n.(
-        if has_follow_ups session
-        then MarkAssignmentWithFollowUpsAsDeleted
-        else MarkAssignmentAsDeleted)
-      Control.MarkAsDeleted
-      Component.Icon.TrashOutline
-  in
   let has_custom_fields = CCList.is_empty custom_fields |> not in
   let cols =
     let name_column =
@@ -746,7 +783,7 @@ let data_table
     let name_column =
       match view_contact_name with
       | true ->
-        Page_admin_contact.contact_lastname_firstname
+        Component.Contacts.contact_lastname_firstname
           access_contact_profiles
           assignment.contact
       | false ->
@@ -787,6 +824,7 @@ let data_table
       |> CCList.filter_map (fun (check, _, to_html) ->
         if check then Some (to_html assignment) else None)
     in
+    let open HttpUtils.AssignmentUtils in
     let buttons =
       [ true, edit
       ; access_contact_profiles, profile_link
@@ -795,8 +833,8 @@ let data_table
         , external_data_ids )
       ; session_changeable assignment, session_change_toggle
       ; send_direct_message, direct_message_toggle
-      ; cancelable assignment, cancel
-      ; deletable assignment, mark_as_deleted
+      ; cancelable session assignment, cancel context experiment session
+      ; deletable assignment, mark_as_deleted context experiment session
       ]
       |> CCList.filter_map (fun (active, form) ->
         if not active then None else Some (form assignment))
