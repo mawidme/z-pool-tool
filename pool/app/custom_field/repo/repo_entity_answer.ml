@@ -36,6 +36,45 @@ module Write = struct
   ;;
 end
 
+module Override = struct
+  type t =
+    { id : Id.t
+    ; custom_field_uuid : Id.t
+    ; entity_uuid : Id.t
+    ; value : string option
+    ; admin_value : string option
+    ; version : Pool_common.Version.t
+    }
+  [@@deriving show, eq]
+
+  let of_entity id custom_field_uuid entity_uuid value admin_value version =
+    { id; custom_field_uuid; entity_uuid; value; admin_value; version }
+  ;;
+
+  let t =
+    let encode (m : t) =
+      Ok
+        ( m.id
+        , ( m.custom_field_uuid
+          , (m.entity_uuid, (m.value, (m.admin_value, m.version))) ) )
+    in
+    let decode _ =
+      Pool_message.Error.WriteOnlyModel |> Pool_common.Utils.failwith
+    in
+    Caqti_type.(
+      custom
+        ~encode
+        ~decode
+        (t2
+           Repo.Id.t
+           (t2
+              Repo.Id.t
+              (t2
+                 Repo.Id.t
+                 (t2 (option Value.t) (t2 (option Value.t) Repo.Version.t))))))
+  ;;
+end
+
 module VersionHistory = struct
   module FieldType = Entity.FieldType
   module SelectOption = Entity.SelectOption
